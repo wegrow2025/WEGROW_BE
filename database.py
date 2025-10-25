@@ -15,6 +15,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
+    name = Column(String)
     hashed_password = Column(String)
     child_age_months = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)

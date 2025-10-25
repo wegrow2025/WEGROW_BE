@@ -31,6 +31,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     hashed_password = get_password_hash(user_data.password)
     user = User(
         email=user_data.email,
+        name=user_data.name,
         hashed_password=hashed_password,
         child_age_months=user_data.child_age
     )
@@ -82,6 +83,9 @@ async def update_profile(
                 detail="Email already in use."
             )
         current_user.email = profile_data.email
+    
+    if profile_data.name:
+        current_user.name = profile_data.name
     
     if profile_data.child_age:
         current_user.child_age_months = profile_data.child_age

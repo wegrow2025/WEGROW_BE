@@ -5,6 +5,7 @@ from datetime import datetime
 # 인증 관련 모델
 class UserRegister(BaseModel):
     email: EmailStr
+    name: str
     password: str
     child_age: int
 
@@ -19,6 +20,7 @@ class Token(BaseModel):
 # 사용자 프로필 모델
 class UserProfile(BaseModel):
     email: Optional[EmailStr] = None
+    name: Optional[str] = None
     child_age: Optional[int] = None
     password: Optional[str] = None
 
