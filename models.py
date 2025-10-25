@@ -1,13 +1,13 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 # 인증 관련 모델
 class UserRegister(BaseModel):
     email: EmailStr
-    name: str
+    name: Optional[str] = None
     password: str
-    child_age: int
+    child_age: int = Field(alias="childAge")
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -15,7 +15,18 @@ class UserLogin(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
+    expires_in: int
+
+class TokenRefresh(BaseModel):
+    refresh_token: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+    expires_in: int
 
 # 사용자 프로필 모델
 class UserProfile(BaseModel):
@@ -30,7 +41,7 @@ class AudioUpload(BaseModel):
     source: str  # "parent" or "robot"
     notes: Optional[str] = None
 
-class AudioSample(BaseModel):
+class AudioSampleResponse(BaseModel):
     id: int
     timestamp: datetime
     duration: float
@@ -39,45 +50,45 @@ class AudioSample(BaseModel):
     notes: Optional[str] = None
 
 class AudioSampleList(BaseModel):
-    samples: List[AudioSample]
+    samples: List[AudioSampleResponse]
 
 # 일일 리포트 모델
 class DailyReport(BaseModel):
     vocalizations: int
-    syllable_combinations: int
-    meaningful_attempts: int
-    new_words: int
-    previous_day: Optional[Dict[str, Any]] = None
+    syllable_combinations: int = Field(alias="syllableCombinations")
+    meaningful_attempts: int = Field(alias="meaningfulAttempts")
+    new_words: int = Field(alias="newWords")
+    previous_day: Optional[Dict[str, Any]] = Field(alias="previousDay", default=None)
 
 class AgeComparison(BaseModel):
-    vocalization_score: float
-    word_understanding_score: float
-    communication_score: float
+    vocalization_score: float = Field(alias="vocalizationScore")
+    word_understanding_score: float = Field(alias="wordUnderstandingScore")
+    communication_score: float = Field(alias="communicationScore")
 
 # 타임라인 모델
 class TimelineItem(BaseModel):
     timestamp: datetime
-    child_speech: str
+    child_speech: str = Field(alias="childSpeech")
     intent: str
-    parent_suggestion: str
+    parent_suggestion: str = Field(alias="parentSuggestion")
 
 class Timeline(BaseModel):
     timeline: List[TimelineItem]
 
 # 성장 분석 모델
 class GrowthAnalysis(BaseModel):
-    syllable_growth: str
-    meaningful_growth: str
-    total_interactions: int
+    syllable_growth: str = Field(alias="syllableGrowth")
+    meaningful_growth: str = Field(alias="meaningfulGrowth")
+    total_interactions: int = Field(alias="totalInteractions")
     highlights: str
-    age_comparison: Dict[str, Any]
+    age_comparison: Dict[str, Any] = Field(alias="ageComparison")
 
 # 팁 & 코칭 모델
 class Tip(BaseModel):
     id: int
     level: str
     scenario: str
-    parent_response: str
+    parent_response: str = Field(alias="parentResponse")
     explanation: str
 
 class TipList(BaseModel):
@@ -85,11 +96,11 @@ class TipList(BaseModel):
 
 # 설정 모델
 class Settings(BaseModel):
-    recording_collection: bool
-    analysis_usage: bool
-    coaching_recommendations: bool
-    notifications_enabled: bool
-    email_reports: bool
+    recording_collection: bool = Field(alias="recordingCollection")
+    analysis_usage: bool = Field(alias="analysisUsage")
+    coaching_recommendations: bool = Field(alias="coachingRecommendations")
+    notifications_enabled: bool = Field(alias="notificationsEnabled")
+    email_reports: bool = Field(alias="emailReports")
 
 # 알림 모델
 class Notification(BaseModel):
@@ -102,9 +113,9 @@ class NotificationList(BaseModel):
 
 # 통계 모델
 class StatsOverview(BaseModel):
-    robot_samples: int
-    parent_samples: int
-    analyzed_samples: int
+    robot_samples: int = Field(alias="robotSamples")
+    parent_samples: int = Field(alias="parentSamples")
+    analyzed_samples: int = Field(alias="analyzedSamples")
 
 # 에러 모델
 class ErrorResponse(BaseModel):

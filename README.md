@@ -78,7 +78,7 @@ ws://localhost:8000/ws?user_id={user_id}
 ```
 
 ### REST API
-- **인증**: `/api/auth/register`, `/api/auth/login`
+- **인증**: `/api/auth/register`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`, `/api/auth/verify`
 - **음성 관리**: `/api/audio/upload`, `/api/audio/samples`
 - **대시보드**: `/api/dashboard/daily-report`, `/api/dashboard/age-comparison`
 - **타임라인**: `/api/timeline`
@@ -86,6 +86,60 @@ ws://localhost:8000/ws?user_id={user_id}
 - **팁 & 코칭**: `/api/tips`
 - **설정**: `/api/settings`
 - **통계**: `/api/stats/overview`
+
+## 인증 시스템
+
+### 회원가입
+```bash
+POST /api/auth/register
+{
+  "email": "user@example.com",
+  "name": "사용자명",
+  "password": "password123",
+  "childAge": 18
+}
+```
+
+**응답:**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "IwgYRhdr9TqnebdxdM0AciM7p728duTWTzinv3mvsAM",
+  "token_type": "bearer",
+  "expires_in": 86400
+}
+```
+
+### 로그인
+```bash
+POST /api/auth/login
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+### 토큰 갱신
+```bash
+POST /api/auth/refresh
+{
+  "refresh_token": "your_refresh_token"
+}
+```
+
+### 토큰 검증
+```bash
+GET /api/auth/verify
+Authorization: Bearer your_access_token
+```
+
+### 로그아웃
+```bash
+POST /api/auth/logout
+{
+  "refresh_token": "your_refresh_token"
+}
+```
 
 ## WebSocket 메시지 형식
 
@@ -181,6 +235,12 @@ ws://localhost:8000/ws?user_id={user_id}
 - 아이 나이별 맞춤형 팁
 - 발달 단계별 권장사항
 - 성장 추적 및 분석
+
+### 5. 토큰 기반 인증 시스템
+- JWT Access Token (24시간 유효)
+- Refresh Token (30일 유효)
+- 자동 토큰 갱신
+- 보안 강화된 인증
 
 ## 테스트
 

@@ -20,7 +20,7 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:3000", "http://127.0.0.1:8080", "http://127.0.0.1:3000"],  # 개발 환경 허용 도메인
+    allow_origins=["*"],  # 개발 환경에서 모든 도메인 허용
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -39,6 +39,11 @@ async def websocket_route(websocket: WebSocket, user_id: int):
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# WebSocket 테스트 페이지 서빙
+if not os.path.exists("ws"):
+    os.makedirs("ws")
+app.mount("/ws", StaticFiles(directory="ws"), name="ws")
 
 # 루트 엔드포인트
 @app.get("/")

@@ -1,0 +1,48 @@
+{
+    "context_aware": true,
+    "age_appropriate": true,
+    "encouragement_level": "high",
+    "response_length": "short",
+    "language": "ko",
+    "fallback_responses": [
+        "정말 좋은 말이야!",
+        "잘 말했어!",
+        "정말 대단해!"
+    ],
+    "age_specific_rules": {
+        "0-12": {
+            "response_length": "very_short",
+            "encouragement_level": "very_high",
+            "focus": "imitation"
+        },
+        "12-18": {
+            "response_length": "short",
+            "encouragement_level": "high",
+            "focus": "first_words"
+        },
+        "18-24": {
+            "response_length": "medium",
+            "encouragement_level": "high",
+            "focus": "word_combinations"
+        },
+        "24-36": {
+            "response_length": "medium",
+            "encouragement_level": "medium",
+            "focus": "sentences"
+        },
+        "36+": {
+            "response_length": "long",
+            "encouragement_level": "medium",
+            "focus": "complex_communication"
+        }
+    },
+    "intent_priorities": {
+        "greeting": 1,
+        "family": 2,
+        "emotion": 3,
+        "object": 4,
+        "food": 5,
+        "question": 6,
+        "general": 7
+    }
+}

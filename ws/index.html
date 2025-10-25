@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>We:Grow WebSocket 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .container {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .connected {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .recording {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            background: #f8f9fa;
+        }
+
+        button:hover {
+            background: #e9ecef;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .test-buttons {
+            display: flex;
+            gap: 5px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .analysis-buttons {
+            display: flex;
+            gap: 5px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .growth-analysis {
+            background: #e8f5e8;
+            border-left-color: #4caf50;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        .growth-section {
+            margin: 10px 0;
+        }
+
+        .growth-section h4 {
+            margin: 5px 0;
+            color: #2e7d32;
+        }
+
+        .growth-item {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+
+        .test-btn {
+            background: #6c757d;
+            color: white;
+            padding: 4px 8px;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .messages {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            padding: 15px;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin: 5px 0;
+            padding: 6px;
+            border-radius: 2px;
+            border-left: 2px solid #007bff;
+            background: #f8f9fa;
+        }
+
+        .transcription {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+
+        .tts {
+            background: #f3e5f5;
+            border-left-color: #9c27b0;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+
+        .analysis {
+            background: #e8f5e8;
+            border-left-color: #4caf50;
+        }
+
+        .analysis-content {
+            margin-top: 10px;
+        }
+
+        .analysis-content h4 {
+            margin: 0 0 10px 0;
+            color: #2e7d32;
+            font-size: 14px;
+        }
+
+        .analysis-item {
+            margin: 5px 0;
+            padding: 3px 0;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .analysis-item strong {
+            color: #1b5e20;
+            display: inline-block;
+            width: 100px;
+        }
+
+        .timestamp {
+            font-size: 11px;
+            color: #666;
+            float: right;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>We:Grow WebSocket 테스트</h1>
+
+        <div id="status" class="status disconnected">
+            연결 대기 중...
+        </div>
+
+        <div class="controls">
+            <button id="connectBtn">연결</button>
+            <button id="disconnectBtn" disabled>연결 해제</button>
+            <button id="recordBtn" disabled>녹음 시작</button>
+            <button id="stopBtn" disabled>녹음 중지</button>
+        </div>
+
+        <div class="test-buttons">
+            <button class="test-btn" onclick="sendTestMessage('안녕하세요')">안녕하세요</button>
+            <button class="test-btn" onclick="sendTestMessage('엄마')">엄마</button>
+            <button class="test-btn" onclick="sendTestMessage('아빠')">아빠</button>
+            <button class="test-btn" onclick="sendTestMessage('물')">물</button>
+            <button class="test-btn" onclick="sendTestMessage('까까')">까까</button>
+            <button class="test-btn" onclick="sendTestMessage('바바바')">바바바</button>
+        </div>
+
+        <div class="analysis-buttons">
+            <button class="test-btn" onclick="loadGrowthAnalysis()">성장 분석</button>
+            <button class="test-btn" onclick="loadDatasetInsights()">데이터셋 인사이트</button>
+            <button class="test-btn" onclick="checkSystemStatus()">시스템 상태</button>
+            <button class="test-btn" onclick="clearTtsCache()">TTS 캐시 정리</button>
+        </div>
+
+        <div class="messages" id="messages"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const messagesEl = document.getElementById('messages');
+
+        function updateStatus(message, className) {
+            statusEl.textContent = message;
+            statusEl.className = `status ${className}`;
+        }
+
+        function addMessage(type, content, confidence = null) {
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+
+            const timestamp = new Date().toLocaleTimeString();
+            let html = `<div class="timestamp">${timestamp}</div>`;
+
+            if (type === 'transcription') {
+                html += `<strong>전사:</strong> "${content}"`;
+                if (confidence !== null) {
+                    html += ` <span style="color: #007bff;">(신뢰도: ${confidence})</span>`;
+                }
+            } else if (type === 'tts') {
+                html += `<strong>TTS:</strong> "${content}"`;
+            } else if (type === 'error') {
+                html += `<strong>오류:</strong> ${content}`;
+            } else if (type === 'audio') {
+                html += `<strong>오디오:</strong> ${content}`;
+            } else {
+                html += `<strong>전송:</strong> ${content}`;
+            }
+
+            messageEl.innerHTML = html;
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function connect() {
+            const userId = 1;
+            ws = new WebSocket(`ws://localhost:8000/ws?user_id=${userId}`);
+
+            ws.onopen = function () {
+                updateStatus('WebSocket 연결됨', 'connected');
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                recordBtn.disabled = false;
+                addMessage('info', 'WebSocket 연결 성공');
+            };
+
+            ws.onmessage = function (event) {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleServerMessage(message);
+                } catch (error) {
+                    addMessage('error', `메시지 파싱 오류: ${error.message}`);
+                }
+            };
+
+            ws.onclose = function () {
+                updateStatus('WebSocket 연결 해제됨', 'disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                recordBtn.disabled = true;
+                stopBtn.disabled = true;
+                addMessage('info', 'WebSocket 연결 해제');
+            };
+
+            ws.onerror = function (error) {
+                updateStatus('WebSocket 오류', 'disconnected');
+                addMessage('error', `연결 오류: ${error.message || '알 수 없는 오류'}`);
+            };
+        }
+
+        function handleServerMessage(message) {
+            console.log('서버 응답:', message);
+
+            switch (message.type) {
+                case 'transcription':
+                    addMessage('transcription', message.text, message.confidence);
+                    // AI 분석 결과 표시
+                    if (message.analysis) {
+                        addAnalysisResult(message.analysis);
+                    }
+                    break;
+                case 'tts_response':
+                    addMessage('tts', message.text);
+                    break;
+                case 'audio_response':
+                    addMessage('audio', `오디오 데이터 수신 (${message.audioData ? message.audioData.length : 0} bytes)`);
+                    break;
+                case 'error':
+                    addMessage('error', `${message.message} (코드: ${message.code})`);
+                    break;
+                default:
+                    addMessage('info', `알 수 없는 메시지 타입: ${message.type}`);
+            }
+        }
+
+        function addAnalysisResult(analysis) {
+            const analysisEl = document.createElement('div');
+            analysisEl.className = 'message analysis';
+            analysisEl.innerHTML = `
+                <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                <div class="analysis-content">
+                    <h4>AI 분석 결과</h4>
+                    <div class="analysis-item">
+                        <strong>의도:</strong> ${analysis.intent || '분석 중...'}
+                    </div>
+                    <div class="analysis-item">
+                        <strong>음절 조합:</strong> ${analysis.syllable_combinations || 0}개
+                    </div>
+                    <div class="analysis-item">
+                        <strong>의미 있는 시도:</strong> ${analysis.meaningful_attempts || 0}회
+                    </div>
+                    <div class="analysis-item">
+                        <strong>새로운 단어:</strong> ${(analysis.new_words || []).join(', ') || '없음'}
+                    </div>
+                    <div class="analysis-item">
+                        <strong>부모 권장사항:</strong> ${analysis.parent_suggestion || '분석 중...'}
+                    </div>
+                    <div class="analysis-item">
+                        <strong>발달 메모:</strong> ${analysis.development_notes || '분석 중...'}
+                    </div>
+                </div>
+            `;
+            messagesEl.appendChild(analysisEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendTextMessage(text) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addMessage('error', 'WebSocket이 연결되지 않았습니다.');
+                return;
+            }
+
+            const message = {
+                type: 'text_message',
+                text: text,
+                timestamp: Date.now()
+            };
+
+            ws.send(JSON.stringify(message));
+            addMessage('info', `텍스트 전송: "${text}"`);
+        }
+
+        function sendAudioData(audioBlob) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addMessage('error', 'WebSocket이 연결되지 않았습니다.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function () {
+                const audioBase64 = reader.result.split(',')[1];
+
+                const message = {
+                    type: 'audio_data',
+                    data: audioBase64,
+                    timestamp: Date.now()
+                };
+
+                ws.send(JSON.stringify(message));
+                addMessage('info', `오디오 데이터 전송 (${audioBase64.length} bytes)`);
+            };
+            reader.readAsDataURL(audioBlob);
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = function (event) {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = function () {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    sendAudioData(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+
+                updateStatus('녹음 중... (중지 버튼을 눌러 중지)', 'recording');
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+
+                addMessage('info', '녹음 시작 - 중지 버튼을 눌러 중지하세요');
+
+            } catch (error) {
+                addMessage('error', `마이크 접근 오류: ${error.message}`);
+                updateStatus('마이크 접근 실패', 'disconnected');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+
+                updateStatus('녹음 완료', 'connected');
+                recordBtn.disabled = false;
+                stopBtn.disabled = true;
+
+                addMessage('info', '녹음 중지');
+            }
+        }
+
+        function sendTestMessage(text) {
+            sendTextMessage(text);
+        }
+
+        async function loadGrowthAnalysis() {
+            try {
+                const response = await fetch('/api/growth/detailed-analysis', {
+                    headers: {
+                        'Authorization': 'Bearer your_token_here' // 실제 토큰 필요
+                    }
+                });
+                const data = await response.json();
+                displayGrowthAnalysis(data);
+            } catch (error) {
+                addMessage('error', `성장 분석 로딩 실패: ${error.message}`);
+            }
+        }
+
+        async function loadDatasetInsights() {
+            try {
+                const response = await fetch('/api/growth/dataset-insights');
+                const data = await response.json();
+                displayDatasetInsights(data);
+            } catch (error) {
+                addMessage('error', `데이터셋 인사이트 로딩 실패: ${error.message}`);
+            }
+        }
+
+        function displayGrowthAnalysis(data) {
+            const analysisEl = document.createElement('div');
+            analysisEl.className = 'message growth-analysis';
+
+            let html = `
+                <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                <h4>성장 분석 결과</h4>
+            `;
+
+            if (data.user_info) {
+                html += `
+                    <div class="growth-section">
+                        <h4>사용자 정보</h4>
+                        <div class="growth-item">이름: ${data.user_info.name}</div>
+                        <div class="growth-item">나이: ${data.user_info.age_months}개월</div>
+                        <div class="growth-item">현재 단계: ${data.user_info.current_stage}</div>
+                    </div>
+                `;
+            }
+
+            if (data.progress_indicators) {
+                html += `
+                    <div class="growth-section">
+                        <h4>발달 지표</h4>
+                        <div class="growth-item">총 상호작용: ${data.progress_indicators.total_interactions || 0}회</div>
+                        <div class="growth-item">일평균 음절: ${(data.progress_indicators.average_syllables_per_day || 0).toFixed(1)}개</div>
+                        <div class="growth-item">의미있는 시도율: ${((data.progress_indicators.meaningful_attempts_rate || 0) * 100).toFixed(1)}%</div>
+                        <div class="growth-item">새로운 단어: ${data.progress_indicators.new_words_learned || 0}개</div>
+                    </div>
+                `;
+            }
+
+            if (data.recommendations && data.recommendations.length > 0) {
+                html += `
+                    <div class="growth-section">
+                        <h4>권장사항</h4>
+                        ${data.recommendations.map(rec => `<div class="growth-item">• ${rec}</div>`).join('')}
+                    </div>
+                `;
+            }
+
+            analysisEl.innerHTML = html;
+            messagesEl.appendChild(analysisEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function displayDatasetInsights(data) {
+            const analysisEl = document.createElement('div');
+            analysisEl.className = 'message analysis';
+
+            let html = `
+                <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                <h4>데이터셋 인사이트</h4>
+                <div class="growth-item">데이터셋 로드: ${data.dataset_loaded ? '성공' : '실패'}</div>
+            `;
+
+            if (data.analysis && data.analysis.language_development_stage) {
+                html += `
+                    <div class="growth-section">
+                        <h4>발달 단계 분석</h4>
+                        <div class="growth-item">단계: ${data.analysis.language_development_stage}</div>
+                        <div class="growth-item">관찰사항: ${data.analysis.key_observations?.join(', ') || '없음'}</div>
+                        <div class="growth-item">권장사항: ${data.analysis.recommendations?.join(', ') || '없음'}</div>
+                    </div>
+                `;
+            }
+
+            if (data.sample_utterances && data.sample_utterances.length > 0) {
+                html += `
+                    <div class="growth-section">
+                        <h4>샘플 발화</h4>
+                        <div class="growth-item">${data.sample_utterances.join(', ')}</div>
+                    </div>
+                `;
+            }
+
+            analysisEl.innerHTML = html;
+            messagesEl.appendChild(analysisEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/speech/system-status');
+                const data = await response.json();
+                displaySystemStatus(data);
+            } catch (error) {
+                addMessage('error', `시스템 상태 확인 실패: ${error.message}`);
+            }
+        }
+
+        function displaySystemStatus(data) {
+            const statusEl = document.createElement('div');
+            statusEl.className = 'message system-status';
+
+            let html = `
+                <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+                <h4>하이브리드 음성 시스템 상태</h4>
+                <div class="growth-item">CLOVA STT: ${data.clova_stt_available ? '사용 가능' : '사용 불가'}</div>
+                <div class="growth-item">응답 목표: ${data.latency_goal}초</div>
+                <div class="growth-item">개인정보 보호: ${data.privacy_mode ? '활성화' : '비활성화'}</div>
+            `;
+
+            if (data.tts_cache_stats) {
+                html += `
+                    <div class="growth-section">
+                        <h4>TTS 캐시 통계</h4>
+                        <div class="growth-item">캐시 파일: ${data.tts_cache_stats.total_files}개</div>
+                        <div class="growth-item">캐시 크기: ${data.tts_cache_stats.total_size_mb}MB</div>
+                    </div>
+                `;
+            }
+
+            statusEl.innerHTML = html;
+            messagesEl.appendChild(statusEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function clearTtsCache() {
+            try {
+                const response = await fetch('/api/speech/clear-cache', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                addMessage('success', `TTS 캐시 정리 완료: ${data.cleared_files}개 파일 삭제`);
+            } catch (error) {
+                addMessage('error', `TTS 캐시 정리 실패: ${error.message}`);
+            }
+        }
+
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        recordBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+    </script>
+</body>
+
+</html>

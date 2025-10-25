@@ -7,10 +7,12 @@ import os
 import tempfile
 import base64
 
-from database import get_db, User, AudioSample, UserSettings, Notification
+from database import get_db, User, AudioSample, UserSettings, Notification, RefreshToken
 from models import *
-from auth import get_current_user, get_password_hash, create_access_token
+from auth import get_current_user, get_password_hash, create_access_token, create_refresh_token, verify_refresh_token, revoke_refresh_token
 from ai_analyzer import ai_analyzer
+from growth_analyzer import growth_analyzer
+from hybrid_speech_system import hybrid_speech_system
 
 # API 라우터
 api_router = APIRouter()
@@ -31,7 +33,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     hashed_password = get_password_hash(user_data.password)
     user = User(
         email=user_data.email,
-        name=user_data.name,
+        name=user_data.name or "사용자",  # name이 없으면 기본값 사용
         hashed_password=hashed_password,
         child_age_months=user_data.child_age
     )
@@ -46,7 +48,14 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     
     # 토큰 생성
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(user.id, db)
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": 86400  # 24시간 (86400초)
+    }
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(login_data: UserLogin, db: Session = Depends(get_db)):
@@ -61,8 +70,16 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # 토큰 생성
     access_token = create_access_token(data={"sub": str(user.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(user.id, db)
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": 86400  # 24시간 (86400초)
+    }
 
 @api_router.put("/user/profile")
 async def update_profile(
@@ -95,6 +112,44 @@ async def update_profile(
     
     db.commit()
     return {"message": "Profile updated successfully."}
+
+@api_router.post("/auth/refresh", response_model=Token)
+async def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
+    """토큰 갱신"""
+    user = verify_refresh_token(token_data.refresh_token, db)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 새 토큰 생성
+    access_token = create_access_token(data={"sub": str(user.id)})
+    new_refresh_token = create_refresh_token(user.id, db)
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+        "expires_in": 86400  # 24시간 (86400초)
+    }
+
+@api_router.post("/auth/logout")
+async def logout(token_data: TokenRefresh, db: Session = Depends(get_db)):
+    """로그아웃 (리프레시 토큰 무효화)"""
+    revoke_refresh_token(token_data.refresh_token, db)
+    return {"message": "Logged out successfully."}
+
+@api_router.get("/auth/verify")
+async def verify_token(current_user: User = Depends(get_current_user)):
+    """토큰 검증"""
+    return {
+        "valid": True,
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name
+    }
 
 # 2. 음성 데이터 관리 API
 @api_router.post("/audio/upload")
@@ -150,7 +205,7 @@ async def get_audio_samples(
     
     sample_list = []
     for sample in samples:
-        sample_list.append(AudioSample(
+        sample_list.append(AudioSampleResponse(
             id=sample.id,
             timestamp=sample.created_at,
             duration=sample.duration,
@@ -219,47 +274,54 @@ async def get_daily_report(
     db: Session = Depends(get_db)
 ):
     """일일 리포트 조회"""
-    if date:
-        target_date = datetime.fromisoformat(date)
-    else:
-        target_date = datetime.now().date()
-    
-    # 당일 데이터
-    today_samples = db.query(AudioSample).filter(
-        AudioSample.user_id == current_user.id,
-        AudioSample.created_at >= target_date,
-        AudioSample.created_at < target_date + timedelta(days=1)
-    ).all()
-    
-    # 전일 데이터
-    yesterday = target_date - timedelta(days=1)
-    yesterday_samples = db.query(AudioSample).filter(
-        AudioSample.user_id == current_user.id,
-        AudioSample.created_at >= yesterday,
-        AudioSample.created_at < target_date
-    ).all()
-    
-    # 통계 계산
-    vocalizations = len(today_samples)
-    syllable_combinations = sum(sample.syllable_combinations for sample in today_samples)
-    meaningful_attempts = sum(sample.meaningful_attempts for sample in today_samples)
-    new_words = sum(len(json.loads(sample.new_words or "[]")) for sample in today_samples)
-    
-    # 전일 비교 데이터
-    previous_day = {
-        "vocalizations": len(yesterday_samples),
-        "syllable_combinations": sum(sample.syllable_combinations for sample in yesterday_samples),
-        "meaningful_attempts": sum(sample.meaningful_attempts for sample in yesterday_samples),
-        "new_words": sum(len(json.loads(sample.new_words or "[]")) for sample in yesterday_samples)
-    }
-    
-    return DailyReport(
-        vocalizations=vocalizations,
-        syllable_combinations=syllable_combinations,
-        meaningful_attempts=meaningful_attempts,
-        new_words=new_words,
-        previous_day=previous_day
-    )
+    try:
+        if date:
+            target_date = datetime.fromisoformat(date)
+        else:
+            target_date = datetime.now().date()
+        
+        # 당일 데이터
+        today_samples = db.query(AudioSample).filter(
+            AudioSample.user_id == current_user.id,
+            AudioSample.created_at >= target_date,
+            AudioSample.created_at < target_date + timedelta(days=1)
+        ).all()
+        
+        # 전일 데이터
+        yesterday = target_date - timedelta(days=1)
+        yesterday_samples = db.query(AudioSample).filter(
+            AudioSample.user_id == current_user.id,
+            AudioSample.created_at >= yesterday,
+            AudioSample.created_at < target_date
+        ).all()
+        
+        # 통계 계산
+        vocalizations = len(today_samples)
+        syllable_combinations = sum(sample.syllable_combinations or 0 for sample in today_samples)
+        meaningful_attempts = sum(sample.meaningful_attempts or 0 for sample in today_samples)
+        new_words = sum(len(json.loads(sample.new_words or "[]")) for sample in today_samples)
+        
+        # 전일 비교 데이터
+        previous_day = {
+            "vocalizations": len(yesterday_samples),
+            "syllable_combinations": sum(sample.syllable_combinations or 0 for sample in yesterday_samples),
+            "meaningful_attempts": sum(sample.meaningful_attempts or 0 for sample in yesterday_samples),
+            "new_words": sum(len(json.loads(sample.new_words or "[]")) for sample in yesterday_samples)
+        }
+        
+        return DailyReport(
+            vocalizations=vocalizations,
+            syllableCombinations=syllable_combinations,
+            meaningfulAttempts=meaningful_attempts,
+            newWords=new_words,
+            previousDay=previous_day
+        )
+    except Exception as e:
+        print(f"Error in get_daily_report: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 @api_router.get("/dashboard/age-comparison", response_model=AgeComparison)
 async def get_age_comparison(
@@ -279,9 +341,9 @@ async def get_age_comparison(
     total_samples = len(recent_samples)
     if total_samples == 0:
         return AgeComparison(
-            vocalization_score=0.0,
-            word_understanding_score=0.0,
-            communication_score=0.0
+            vocalizationScore=0.0,
+            wordUnderstandingScore=0.0,
+            communicationScore=0.0
         )
     
     # 발성 점수 (옹알이 수 기반)
@@ -295,9 +357,9 @@ async def get_age_comparison(
     communication_score = (vocalization_score + word_understanding_score) / 2
     
     return AgeComparison(
-        vocalization_score=vocalization_score,
-        word_understanding_score=word_understanding_score,
-        communication_score=communication_score
+        vocalizationScore=vocalization_score,
+        wordUnderstandingScore=word_understanding_score,
+        communicationScore=communication_score
     )
 
 # 4. 타임라인 API
@@ -490,6 +552,82 @@ async def get_stats_overview(
         parent_samples=parent_samples,
         analyzed_samples=analyzed_samples
     )
+
+# 9. 성장 분석 API (개선된 버전)
+@api_router.get("/growth/detailed-analysis")
+async def get_detailed_growth_analysis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """상세 성장 분석 (데이터셋 기반)"""
+    try:
+        analysis_result = growth_analyzer.analyze_user_progress(current_user.id, db)
+        return analysis_result
+    except Exception as e:
+        print(f"Error in detailed growth analysis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"성장 분석 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@api_router.get("/growth/dataset-insights")
+async def get_dataset_insights():
+    """데이터셋 기반 인사이트 조회"""
+    try:
+        insights = ai_analyzer.dataset_insights
+        return {
+            "dataset_loaded": bool(insights.get("data_analysis")),
+            "analysis": insights.get("data_analysis", {}),
+            "sample_utterances": insights.get("child_utterances", [])[:10],
+            "conversation_pairs": insights.get("conversation_pairs", [])[:5]
+        }
+    except Exception as e:
+        print(f"Error getting dataset insights: {e}")
+        return {"error": "데이터셋 인사이트를 불러올 수 없습니다"}
+
+# 10. 하이브리드 음성 시스템 API
+@api_router.get("/speech/system-status")
+async def get_speech_system_status():
+    """하이브리드 음성 시스템 상태 조회"""
+    try:
+        status = hybrid_speech_system.get_system_status()
+        return status
+    except Exception as e:
+        print(f"Error getting speech system status: {e}")
+        return {"error": "시스템 상태를 불러올 수 없습니다"}
+
+@api_router.post("/speech/process")
+async def process_speech_interaction(
+    audio_data: str,  # base64 encoded audio
+    current_user: User = Depends(get_current_user)
+):
+    """하이브리드 음성 상호작용 처리"""
+    try:
+        # Base64 디코딩
+        audio_bytes = base64.b64decode(audio_data)
+        
+        # 하이브리드 시스템으로 처리
+        result = hybrid_speech_system.process_speech_interaction(
+            audio_bytes, current_user.child_age_months, current_user.id
+        )
+        
+        return result
+    except Exception as e:
+        print(f"Error processing speech interaction: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"음성 처리 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@api_router.post("/speech/clear-cache")
+async def clear_tts_cache():
+    """TTS 캐시 정리"""
+    try:
+        result = hybrid_speech_system.clear_tts_cache()
+        return result
+    except Exception as e:
+        print(f"Error clearing TTS cache: {e}")
+        return {"error": "캐시 정리 중 오류가 발생했습니다"}
 
 # 백그라운드 작업
 async def analyze_audio_background(sample_id: int, file_path: str, child_age_months: int):

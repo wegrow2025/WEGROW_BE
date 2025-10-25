@@ -61,6 +61,19 @@ class AudioSample(Base):
     # Relationships
     user = relationship("User", back_populates="audio_samples")
 
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    token = Column(String, unique=True, index=True)
+    expires_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_revoked = Column(Boolean, default=False)
+    
+    # Relationships
+    user = relationship("User")
+
 class Notification(Base):
     __tablename__ = "notifications"
     

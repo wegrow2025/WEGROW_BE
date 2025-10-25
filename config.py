@@ -6,6 +6,10 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     
+    # CLOVA Configuration
+    clova_client_id: str = os.getenv("CLOVA_CLIENT_ID", "")
+    clova_client_secret: str = os.getenv("CLOVA_CLIENT_SECRET", "")
+    
     # Database Configuration
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./wegrow.db")
     
@@ -15,7 +19,7 @@ class Settings(BaseSettings):
     # JWT Configuration
     secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-here")
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 1440  # 24시간 (1440분)
     
     # Server Configuration
     host: str = "0.0.0.0"
